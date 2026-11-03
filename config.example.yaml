@@ -1,0 +1,32 @@
+# EFB Video Parser Middleware (flechazo.video_parser)
+# Copy to <profile>/flechazo.video_parser/config.yaml
+# Any string value may reference environment variables: ${NAME} or ${NAME:-default}
+
+process_links: true             # WeChat share cards
+process_text: true              # video URLs inside text messages (e.g. Douyin share text)
+max_videos_per_message: 2
+
+# Resolution order. bilibili: own API client (yt-dlp is blocked with HTTP 412);
+# douyin: needs douyin_api or cookies_file; ytdlp: sites in ytdlp_domains;
+# direct: URLs ending in .mp4/.mov/.webm ...
+resolvers: [bilibili, douyin, ytdlp, direct]
+extra_ytdlp_domains: []         # appended to the built-in yt-dlp site list
+
+# Proxy for sites blocked in mainland China (only used for proxy_domains)
+proxy: "${VIDEO_PARSER_PROXY:-}"
+# proxy_domains: [youtube.com, youtu.be, googlevideo.com, x.com, twitter.com, ...]
+
+# Douyin has no cookie-free API any more. Use one of:
+douyin_api: ""                  # e.g. http://host.docker.internal:80 (Evil0ctal/Douyin_TikTok_Download_API)
+cookies_file: ""                # Netscape cookies.txt exported from a browser, used by yt-dlp
+
+bilibili_qn: 80
+max_duration: 10800             # seconds; longer videos are skipped
+max_size_mb: 2000               # download limit
+part_size_mb: 0                 # 0 = auto: 1950 with a local Bot API server, else 49
+reply_to_link: true             # send the video as a reply to the link message
+notify_failure: false           # reply with a short error when a video cannot be fetched
+workers: 2
+tmp_dir: /tmp/efb_video_parser  # must be visible to the local Bot API server at the same path
+keep_minutes: 10                # reuse a download when the same link is shared to several chats
+send_timeout: 3600

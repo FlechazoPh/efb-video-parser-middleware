@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "efb-video-parser-middleware"
+version = "1.0.0"
+description = "EH Forwarder Bot middleware: download videos behind shared links (Bilibili, Xiaohongshu, YouTube, X, Douyin ...) and send them as video messages, splitting large files into one album"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "FlechazoPh" }]
+keywords = ["ehforwarderbot", "efb", "middleware", "video", "yt-dlp", "bilibili", "telegram"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Topic :: Communications :: Chat",
+]
+dependencies = [
+    "ehforwarderbot>=2.0.0",
+    "requests",
+    "PyYAML",
+    "yt-dlp>=2025.1.1",
+]
+
+[project.urls]
+Homepage = "https://github.com/FlechazoPh/efb-video-parser-middleware"
+
+[project.entry-points."ehforwarderbot.middleware"]
+"flechazo.video_parser" = "efb_video_parser_middleware:VideoParserMiddleware"
+
+[tool.setuptools.packages.find]
+include = ["efb_video_parser_middleware*"]
