@@ -137,6 +137,33 @@ def test_bilibili_short_link_to_live_room_is_not_video():
     assert resolvers.BilibiliResolver({}, session).resolve("https://b23.tv/x") is None
 
 
+def test_parsehub_resolver():
+    cfg = {"parsehub_api": "http://ph:8000"}
+    # video post -> VideoSource with direct url
+    session = FakeSession({"http://ph:8000/parse": FakeResp({
+        "type": "video", "platform": "douyin", "title": "舞蹈", "raw_url": "https://www.douyin.com/video/1",
+        "media": {"url": "https://v.douyinvod.com/x.mp4", "ext": "mp4", "duration": 9934,
+                  "thumb_url": "https://p.douyinpic.com/c.jpg", "width": 1024, "height": 576}})})
+    r = resolvers.ParseHubResolver(cfg, session)
+    assert r.matches("https://v.douyin.com/abc/") and not r.matches("https://mp.weixin.qq.com/s/x")
+    src = r.resolve("https://v.douyin.com/abc/")
+    assert src.url == "https://v.douyinvod.com/x.mp4" and src.title == "舞蹈" and src.site == "douyin"
+    assert src.duration == 0  # unreliable unit -> left to ffprobe
+    assert session.calls[0][1] == {"url": "https://v.douyin.com/abc/"}
+    # image post -> None (handled by telegraph), unsupported platform -> None
+    session.routes["http://ph:8000/parse"] = FakeResp({"type": "image", "media": [{"url": "a"}]})
+    assert r.resolve("https://v.douyin.com/abc/") is None
+    session.routes["http://ph:8000/parse"] = FakeResp({}, status=422)
+    assert r.resolve("https://v.douyin.com/abc/") is None
+    # service error -> ResolveError
+    session.routes["http://ph:8000/parse"] = FakeResp({"detail": "login required"}, status=502)
+    import pytest as _pytest
+    with _pytest.raises(resolvers.ResolveError):
+        r.resolve("https://v.douyin.com/abc/")
+    # disabled when no api configured
+    assert resolvers.ParseHubResolver({}, session).matches("https://v.douyin.com/abc/") is False
+
+
 def test_douyin_needs_api_or_cookies():
     session = FakeSession({"https://v.douyin.com/": FakeResp(status=302, headers={
         "Location": "https://www.iesdouyin.com/share/video/7000000000000000001/?x=1"})})

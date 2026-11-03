@@ -12,7 +12,11 @@ DEFAULTS: Dict[str, Any] = {
     "process_links": True,          # WeChat share cards (MsgType.Link)
     "process_text": True,           # video URLs inside text messages
     "max_videos_per_message": 2,
-    "resolvers": ["bilibili", "douyin", "ytdlp", "direct"],
+    "resolvers": ["bilibili", "parsehub", "douyin", "ytdlp", "direct"],
+    # Self-hosted ParseHub HTTP service (video + image). Empty disables it.
+    "parsehub_api": "",             # e.g. http://parsehub_service:8000
+    "parsehub_timeout": 60,
+    "parsehub_hosts": [],           # override which hosts go to parsehub (empty = built-in list)
     # Sites handed to yt-dlp. Pages without a video (image notes...) are ignored.
     "ytdlp_domains": [
         "youtube.com", "youtu.be", "x.com", "twitter.com", "xiaohongshu.com", "xhslink.com",

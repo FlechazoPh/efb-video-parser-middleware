@@ -256,6 +256,74 @@ def extract_info(url: str, config: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     return info
 
 
+# ------------------------------------------------------------ ParseHub ---
+class ParseHubResolver(Resolver):
+    """Resolve videos through a self-hosted ParseHub HTTP service.
+
+    Covers Douyin / Kuaishou / Weibo / Xiaohongshu videos (and 20+ more) that
+    need per-platform cookies the service holds. Image posts are left to the
+    Telegraph middleware, so only ``type == video`` is turned into a video.
+    """
+
+    name = "parsehub"
+    # Only platforms worth routing here; Bilibili keeps its own resolver, and
+    # generic sites stay with yt-dlp. Driven by config so it is easy to extend.
+    DEFAULT_PLATFORM_HOSTS = {
+        "douyin.com", "iesdouyin.com", "v.douyin.com", "kuaishou.com", "v.kuaishou.com",
+        "xiaohongshu.com", "xhslink.com", "weibo.com", "weibo.cn", "pipix.com",
+        "xiaoheihe.cn", "ixigua.com",
+    }
+
+    def __init__(self, config, session):
+        super().__init__(config, session)
+        self.base = (config.get("parsehub_api") or "").rstrip("/")
+        self.timeout = float(config.get("parsehub_timeout", 60))
+        self.hosts = set(config.get("parsehub_hosts") or self.DEFAULT_PLATFORM_HOSTS)
+        self._warned = False
+
+    def matches(self, url: str) -> bool:
+        return bool(self.base) and host_in(host_of(url), self.hosts)
+
+    def resolve(self, url: str) -> Optional[VideoSource]:
+        if not self.base:
+            if not self._warned:
+                logger.warning("parsehub resolver enabled but parsehub_api not set; skipping")
+                self._warned = True
+            return None
+        try:
+            r = self.session.get(f"{self.base}/parse", params={"url": url}, timeout=self.timeout)
+        except requests.RequestException as exc:
+            raise ResolveError(f"parsehub service unreachable: {exc}") from exc
+        if r.status_code == 422:
+            return None  # service says unsupported platform
+        if r.status_code >= 400:
+            detail = ""
+            try:
+                detail = (r.json() or {}).get("detail", "")
+            except ValueError:
+                detail = r.text[:120]
+            raise ResolveError(f"parsehub: {detail or r.status_code}")
+        data = r.json() or {}
+        if data.get("type") != "video":
+            return None  # image / richtext / music -> handled elsewhere
+        media = data.get("media")
+        if isinstance(media, list):
+            media = media[0] if media else None
+        if not isinstance(media, dict) or not media.get("url"):
+            raise ResolveError("parsehub returned no video url")
+        headers = {"User-Agent": DESKTOP_UA}
+        if host_in(host_of(media["url"]), {"xhscdn.com", "sinaimg.cn", "qpic.cn"}):
+            headers["Referer"] = f"https://{host_of(url)}/"
+        return VideoSource(
+            webpage_url=data.get("raw_url") or url,
+            title=(data.get("title") or data.get("content") or "").strip(),
+            # ParseHub documents duration in seconds but some platforms (e.g.
+            # Douyin) report milliseconds, so it is unreliable; leave it to the
+            # ffprobe pass after download (max_duration is re-checked there).
+            duration=0, url=media["url"], headers=headers,
+            site=data.get("platform") or host_of(url), uploader="")
+
+
 # -------------------------------------------------------------- direct ---
 class DirectResolver(Resolver):
     name = "direct"
@@ -275,7 +343,7 @@ class DirectResolver(Resolver):
 
 
 def build_resolvers(config: Dict[str, Any], session: requests.Session) -> List[Resolver]:
-    enabled = config.get("resolvers") or ["bilibili", "douyin", "ytdlp", "direct"]
-    table = {"bilibili": BilibiliResolver, "douyin": DouyinResolver, "ytdlp": YtDlpResolver,
-             "direct": DirectResolver}
+    enabled = config.get("resolvers") or ["bilibili", "parsehub", "douyin", "ytdlp", "direct"]
+    table = {"bilibili": BilibiliResolver, "parsehub": ParseHubResolver,
+             "douyin": DouyinResolver, "ytdlp": YtDlpResolver, "direct": DirectResolver}
     return [table[name](config, session) for name in enabled if name in table]
